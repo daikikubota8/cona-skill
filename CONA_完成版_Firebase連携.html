@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="CONAスキル">
+<title>CONAスキルチェック</title>
+
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+:root{
+  --green:#1D9E75;--green-bg:#E1F5EE;--green-dark:#085041;
+  --blue:#378ADD;--blue-bg:#E6F1FB;--blue-dark:#0C447C;
+  --amber:#BA7517;--amber-bg:#FAEEDA;--amber-dark:#633806;
+  --red:#E24B4A;--red-bg:#FCEBEB;--red-dark:#791F1F;
+  --ink:#1a1a1a;--ink2:#555;--ink3:#999;--ink4:#ccc;
+  --surface:#fff;--surface2:#f8f8f5;--surface3:#f2f2ee;
+  --line:#e8e8e0;--line2:#d8d8d0;
+  --radius:10px;--radius-sm:6px;
+}
+html,body{height:100%;overflow:hidden;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;background:var(--surface);color:var(--ink);font-size:13px;}
+
+/* ─── LAYOUT ─── */
+#app{display:flex;flex-direction:column;height:100vh;max-width:540px;margin:0 auto;background:var(--surface);}
+#scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom);}
+
+/* ─── SETUP SCREEN ─── */
+#setup-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;padding:32px 24px;text-align:center;}
+#setup-screen h1{font-size:22px;font-weight:600;margin-bottom:8px;color:var(--ink);}
+#setup-screen p{font-size:13px;color:var(--ink3);line-height:1.7;margin-bottom:28px;}
+.setup-field{width:100%;margin-bottom:12px;text-align:left;}
+.setup-field label{font-size:11px;font-weight:600;color:var(--ink2);display:block;margin-bottom:5px;letter-spacing:.5px;}
+.setup-field input{width:100%;border:1px solid var(--line2);border-radius:var(--radius-sm);padding:11px 12px;font-size:13px;outline:none;color:var(--ink);}
+.setup-field input:focus{border-color:var(--blue);}
+.setup-hint{font-size:11px;color:var(--ink3);line-height:1.6;background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:20px;text-align:left;width:100%;}
+.setup-hint a{color:var(--blue);}
+.btn-primary{width:100%;background:var(--ink);color:#fff;border:none;border-radius:var(--radius);padding:14px;font-size:15px;font-weight:600;cursor:pointer;}
+.btn-primary:active{opacity:.85;}
+
+/* ─── HEADER ─── */
+#hdr{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 14px 8px;flex-shrink:0;position:sticky;top:0;z-index:30;}
+.hdr-top{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.hdr-title{font-size:15px;font-weight:600;color:var(--ink);flex:1;}
+.sync-pill{font-size:10px;padding:3px 9px;border-radius:99px;font-weight:500;transition:all .2s;}
+.sync-ok{background:var(--green-bg);color:var(--green-dark);}
+.sync-ing{background:var(--blue-bg);color:var(--blue-dark);}
+.sync-err{background:var(--red-bg);color:var(--red-dark);}
+.prog-bar{height:2px;background:var(--line);border-radius:1px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--green);transition:width .35s;}
+
+/* ─── STAFF BAR ─── */
+#staff-area{background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;}
+.staff-scroll-wrap{display:flex;align-items:center;}
+#staff-tabs{display:flex;overflow-x:auto;flex:1;scrollbar-width:none;}
+#staff-tabs::-webkit-scrollbar{display:none;}
+.stab{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:10px 13px;font-size:12px;color:var(--ink3);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;}
+.stab.active{color:var(--ink);border-bottom-color:var(--ink);font-weight:600;}
+.stab-pencil{background:none;border:none;color:var(--ink4);font-size:11px;cursor:pointer;padding:0 1px;line-height:1;}
+.add-staff{flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;background:none;font-size:20px;color:var(--ink3);cursor:pointer;}
+.del-staff{flex-shrink:0;padding:8px 10px;border:none;background:none;font-size:12px;color:var(--red);cursor:pointer;}
+
+/* ─── SKILL TAB ─── */
+#skill-bar{display:flex;background:var(--surface2);border-bottom:1px solid var(--line);flex-shrink:0;}
+.sktab{flex:1;padding:9px 4px;text-align:center;font-size:11px;color:var(--ink3);border-bottom:2px solid transparent;cursor:pointer;font-weight:500;}
+.sktab.active{color:var(--blue);border-bottom-color:var(--blue);}
+
+/* ─── SUMMARY ─── */
+#summary{display:flex;gap:6px;padding:8px 10px;background:var(--surface2);border-bottom:1px solid var(--line);flex-shrink:0;}
+.stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-sm);padding:7px 4px;text-align:center;}
+.stat-n{font-size:19px;font-weight:600;}
+.stat-l{font-size:9px;color:var(--ink3);margin-top:1px;}
+.n-g{color:var(--green)}.n-b{color:var(--blue)}.n-a{color:var(--amber)}.n-k{color:var(--ink2)}
+
+/* ─── COL LABELS ─── */
+.col-lbls{display:flex;justify-content:flex-end;padding:5px 12px 0;background:var(--surface);}
+.col-lbl{width:46px;text-align:center;font-size:9px;color:var(--ink3);}
+
+/* ─── CHECKLIST ─── */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 4px;background:var(--surface2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+.sec-title{font-size:10px;font-weight:600;color:var(--ink2);}
+.sec-edit-btn{font-size:10px;color:var(--ink3);background:none;border:1px solid var(--line2);border-radius:4px;padding:2px 7px;cursor:pointer;}
+.item-row{display:flex;align-items:stretch;border-bottom:1px solid #f0f0e8;background:var(--surface);}
+.item-txt{flex:1;padding:10px 6px 10px 13px;font-size:12px;line-height:1.5;color:var(--ink);}
+.item-edit-btn{background:none;border:none;font-size:10px;color:var(--ink4);cursor:pointer;padding:0 4px;align-self:center;flex-shrink:0;}
+.checks{display:flex;}
+.ckbtn{width:46px;min-height:44px;display:flex;align-items:center;justify-content:center;background:none;border-left:1px solid #f0f0e8;border-top:none;border-right:none;border-bottom:none;cursor:pointer;}
+.ck{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line2);display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .12s;}
+.ckbtn.on1 .ck{background:var(--green-bg);border-color:var(--green);color:var(--green);}
+.ckbtn.on2 .ck{background:var(--blue-bg);border-color:var(--blue);color:var(--blue);}
+.ckbtn.on3 .ck{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
+
+/* ─── EDIT PANEL ─── */
+.edit-panel{background:#f5f9ff;padding:8px 12px;border-bottom:1px solid #c5d8f0;}
+.edit-row{display:flex;gap:6px;margin-bottom:6px;align-items:center;}
+.edit-row input,.edit-row textarea{flex:1;border:1px solid #a0bde0;border-radius:var(--radius-sm);padding:7px 9px;font-size:12px;font-family:inherit;outline:none;background:var(--surface);color:var(--ink);resize:none;}
+.edit-row input:focus,.edit-row textarea:focus{border-color:var(--blue);}
+.ebtn{border:none;border-radius:var(--radius-sm);padding:7px 11px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.ebtn-save{background:var(--ink);color:#fff;}
+.ebtn-del{background:var(--red-bg);color:var(--red-dark);}
+.ebtn-add{background:var(--green-bg);color:var(--green-dark);}
+.sec-edit-panel{background:#f0f6ff;padding:8px 12px;border-bottom:1px solid #b5d0f0;}
+.sec-edit-panel input{width:100%;border:1px solid #90b8e8;border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;outline:none;margin-bottom:7px;}
+.sec-edit-actions{display:flex;gap:6px;}
+.sec-edit-actions button{flex:1;border:none;border-radius:var(--radius-sm);padding:7px;font-size:11px;font-weight:600;cursor:pointer;}
+
+.add-item-btn{width:100%;padding:9px;background:var(--surface2);border:none;border-bottom:1px solid var(--line);font-size:11px;color:var(--ink3);cursor:pointer;text-align:left;padding-left:14px;}
+.add-item-btn:active{background:var(--surface3);}
+.add-sec-btn{width:100%;padding:10px;background:var(--surface2);border:none;border-top:1px solid var(--line);font-size:12px;color:var(--ink3);cursor:pointer;}
+.add-sec-btn:active{background:var(--surface3);}
+
+/* ─── MODAL ─── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;align-items:center;justify-content:center;}
+.modal-bg.show{display:flex;}
+.modal-box{background:var(--surface);border-radius:14px;padding:22px 18px;width:calc(100% - 40px);max-width:320px;}
+.modal-box h3{font-size:14px;font-weight:600;margin-bottom:13px;}
+.modal-box input{width:100%;border:1px solid var(--line2);border-radius:var(--radius-sm);padding:10px 11px;font-size:14px;outline:none;margin-bottom:13px;}
+.modal-box input:focus{border-color:var(--blue);}
+.modal-btns{display:flex;gap:8px;}
+.modal-btns button{flex:1;padding:10px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:none;cursor:pointer;}
+.mbtn-cancel{background:var(--surface2);color:var(--ink2);}
+.mbtn-ok{background:var(--ink);color:#fff;}
+
+/* ─── TOAST ─── */
+#toast{position:fixed;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:rgba(26,26,26,.92);color:#fff;padding:9px 18px;border-radius:99px;font-size:12px;z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;}
+#toast.show{opacity:1;}
+
+/* ─── LOADING ─── */
+#loading{position:fixed;inset:0;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;gap:12px;}
+#loading p{font-size:13px;color:var(--ink3);}
+.spinner{width:28px;height:28px;border:2.5px solid var(--line);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- ロード中 -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p>接続中...</p>
+</div>
+
+<!-- Firebase未設定時のセットアップ画面 -->
+<div id="setup-screen" style="display:none;">
+  <h1>Firebase を接続</h1>
+  <p>リアルタイム同期のために<br>Firebase の設定情報を入力してください。<br>同梱の「設定手順書.txt」を参照してください。</p>
+
+  <div class="setup-hint">
+    📋 <strong>必要なもの：</strong><br>
+    ① <a href="https://console.firebase.google.com" target="_blank">Firebase Console</a> でプロジェクト作成<br>
+    ② Realtime Database を有効化<br>
+    ③ 下記の設定値を貼り付け
+  </div>
+
+  <div class="setup-field">
+    <label>API KEY</label>
+    <input type="text" id="cfg-apikey" placeholder="AIzaSy...">
+  </div>
+  <div class="setup-field">
+    <label>AUTH DOMAIN</label>
+    <input type="text" id="cfg-domain" placeholder="your-app.firebaseapp.com">
+  </div>
+  <div class="setup-field">
+    <label>DATABASE URL</label>
+    <input type="text" id="cfg-dburl" placeholder="https://your-app-default-rtdb.firebaseio.com">
+  </div>
+  <div class="setup-field">
+    <label>PROJECT ID</label>
+    <input type="text" id="cfg-projectid" placeholder="your-app">
+  </div>
+
+  <button class="btn-primary" onclick="connectFirebase()">接続して始める</button>
+</div>
+
+<!-- メインアプリ -->
+<div id="app" style="display:none;">
+  <div id="hdr">
+    <div class="hdr-top">
+      <span class="hdr-title">CONAスキルチェック</span>
+      <span class="sync-pill sync-ok" id="sync-pill">● 同期済み</span>
+    </div>
+    <div class="prog-bar"><div class="prog-fill" id="prog" style="width:0%"></div></div>
+  </div>
+
+  <div id="staff-area">
+    <div class="staff-scroll-wrap">
+      <div id="staff-tabs"></div>
+      <button class="add-staff" onclick="addStaff()" title="追加">+</button>
+      <button class="del-staff" onclick="deleteStaff()">削除</button>
+    </div>
+  </div>
+
+  <div id="skill-bar">
+    <div class="sktab active" onclick="switchSk(0)">ホール</div>
+    <div class="sktab" onclick="switchSk(1)">ドリ・キッチン</div>
+    <div class="sktab" onclick="switchSk(2)">OP・CL</div>
+  </div>
+
+  <div id="summary">
+    <div class="stat"><div class="stat-n n-g" id="sn-t">0</div><div class="stat-l">教わった</div></div>
+    <div class="stat"><div class="stat-n n-b" id="sn-c">0</div><div class="stat-l">できる</div></div>
+    <div class="stat"><div class="stat-n n-a" id="sn-e">0</div><div class="stat-l">教えられる</div></div>
+    <div class="stat"><div class="stat-n n-k" id="sn-all">0</div><div class="stat-l">全項目</div></div>
+  </div>
+
+  <div class="col-lbls">
+    <div class="col-lbl">教わった</div>
+    <div class="col-lbl">できる</div>
+    <div class="col-lbl">教えられる</div>
+  </div>
+
+  <div id="scroll-area"><div id="list"></div></div>
+</div>
+
+<!-- モーダル -->
+<div class="modal-bg" id="modal">
+  <div class="modal-box">
+    <h3 id="modal-h"></h3>
+    <input type="text" id="modal-inp" maxlength="40">
+    <div class="modal-btns">
+      <button class="mbtn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="mbtn-ok" onclick="modalOk()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════
+   デフォルトのスキルデータ
+══════════════════════════════════════ */
+const DEFAULT_SHEETS = [
+  {name:'ホール',sections:[
+    {title:'ご案内',items:['外で入店を迷っているお客様に声掛けができる','来店に気づき、入口の扉を先に開けることができる','ご来店時に明るく挨拶ができる','お客様のお名前や人数を正確に聞き取ることができる','時間制の説明ができる','年齢・飲酒運転の確認ができる','空席・混雑状況を考慮した対応ができる','お客様に応じたご案内ができる（お子様連れ、ご年配など）','満席時に門前払いせず、再来店に繋がるお声かけができる']},
+    {title:'ファーストトーク',items:['おしぼりを開いた状態で、丁寧に渡すことができる','来店回数に応じたファーストトークができる','POPなどを指差し、アプリ登録の案内ができる','初回登録特典の説明ができる','再来店クーポンの説明ができる','来店ポイントの付与ができる','初回登録特典の使用対応ができる','再来店クーポンの使用対応ができる','おすすめの商品説明を自然に添えることができる','モバイルオーダーの説明ができる','飲み放題の説明ができる','コースの説明ができる']},
+    {title:'提供・中間バッシング',items:['定期的にデシャップに意識を向けることができる','提供前に商品名・数量の確認ができる','正しいグラスの持ち方で提供することができる','商品名を正しく伝えてから提供することができる','注文者の前にドリンクを提供することができる','提供の優先順位の判断ができる（冷菜→温菜など）','中間バッシング時に一声かけた上で回収できる','空いたグラス・お皿などを見逃さず回収できる','通路動線や他のお客様への配慮ができる']},
+    {title:'状況共有・ラウンド中の対応',items:['お客様の呼びかけにすぐ返事やアイコンタクトができる','複数対応時に"少々お待ちください"など簡易返答ができる','他スタッフとテーブル状況を共有・引き継ぎできる','テーブル状況をキッチンに共有できる','残り時間を把握しキッチンに共有できる','時間管理ができる','クレーム時に状況に応じた即時対応ができる']},
+    {title:'ラストオーダー・お見送り',items:['追加注文のお伺いができる（ドリンク、ドルチェなど）','外まで出てお見送りができる','+αの声掛けができる（雨天時など）','請求・クレームがあった際に謝罪ができる']},
+    {title:'バッシング・トイレ清掃',items:['適切なテーブルセットができる（メニュー、カトラリーなど）','TCタイマーの意味を理解し適切に運用できる','トイレチェック表の記入ができる','重点箇所を正しく清掃できる','ペーパーなど備品の補充ができる']},
+    {title:'ボトルワイン対応',items:['ボトルワインの注文対応ができる（番号・グラス数の確認）','ボトルワインの提供対応ができる（注ぎ方・説明など）']},
+    {title:'ハンディ操作',items:['担当者の変更ができる','オーダーを飛ばすことができる','ファースト・ラストキーの説明ができる','アプリクーポンを飛ばすことができる','コース・コースピザを飛ばすことができる','ハンディ上で注文の削除ができる','ハンディ上でテーブル移動ができる','タイマーの設定ができる']},
+    {title:'レジ操作（お会計）',items:['伝票を出す際に必要事項を正しく入力できる','現金会計ができる','カード会計ができる','PayPay会計ができる','グルメサイトポイントの処理ができる','クーポンの処理ができる','レジ上で会計を合算できる','領収書の発行ができる','収入印紙の対応ができる','レジロールの交換ができる']},
+    {title:'予約対応・システム操作',items:['明るくはきはきと予約対応できる','日時・人数・名前・電話番号を正確に聞きとれる','時間制・キャンセル規程の説明ができる','入退店の処理ができる（レストランボード）','予約入力ができる','ヤマの設定・解除ができる（Mr.Menu）']}
+  ]},
+  {name:'ドリ・キッチン',sections:[
+    {title:'ドリンク：在庫・仕込み',items:['営業前の調理器具・備品準備ができる','食材・仕込みの確認ができる','レシピ通りの分量・調理法で仕込みができる','在庫・仕込みの補充・報連相ができる','食材・飲料を適切に保管できる（温度管理など）','食材を最後まで使い切ることができる']},
+    {title:'ドリンク：調理オペレーション',items:['作成前にグラスの確認ができる（汚れ・欠けなど）','レシピ通りに作成できる（量・グラデーションなど）','ストロー・マドラーを正しく入れることができる','複数杯を同時に作成できる','完成後に"提供お願いします"などの声出しができる','生樽の交換ができる（クラフトビールも）','ガンシロップの交換ができる','ガスの交換ができる','ワインオープナーを使用できる']},
+    {title:'サイド：在庫・仕込み',items:['営業前の調理器具・備品準備ができる','食材・仕込みの確認ができる','レシピ通りの分量・調理法で仕込みができる','食材を適切に保管できる']},
+    {title:'サイド：調理オペレーション',items:['レシピ通りに調理できる（量・作成法・盛り付けなど）','作成の優先順位の判断ができる','食事のペースにあわせた提供ができる','完成後に声出しができる','調理状況を他ポジションに共有できる','伝票の不備・変更に気づき確認できる','チップロールの交換ができる']},
+    {title:'ピザ：調理オペレーション',items:['生地を伸ばすことができる','ピザをヘラに乗せることができる','ピザを窯に入れることができる','ピザを均等に切ることができる','レシピ通りに調理できる','完成後に声出しができる','調理状況を他ポジションに共有できる']},
+    {title:'キッチン全般：衛生管理',items:['グラス・食器を正しく洗うことができる','優先順位を考えて洗い物ができる','作業前に手指・調理器具の消毒ができる','ダスター・まな板の色分けを説明できる','生肉・加熱肉・海鮮を正しく取り扱える','異物混入・アレルゲンへの配慮ができる','120分タイマーの意味を理解し運用できる','キッチン衛生記録表の記入ができる']}
+  ]},
+  {name:'OP・CL',sections:[
+    {title:'オープン作業',items:['予約を確認することができる','テーブル確認・テーブルセットができる','店前の準備・掃き掃除ができる（看板・灰皿設置など）','正しい場所に納品ができる','食洗器の起動ができる','ピザ窯・茹で麺機・フライヤー・オーブンの点火ができる','ドリンクの立ち上げができる','サイドの立ち上げができる','ピザの立ち上げができる','冷蔵庫冷凍庫温度管理表の記入ができる']},
+    {title:'クローズ：ホール',items:['テーブル・周辺の清掃ができる（拭き上げ・備品交換など）','床の掃き掃除ができる','トイレ清掃ができる','おしぼり・洗剤・アルコールの補充ができる','電子機器の拭き上げ・充電ができる（ハンディ・iPad・電話機）']},
+    {title:'クローズ：ドリンク',items:['飲料・備品の補充ができる','ボトル類の拭き上げができる','ビールサーバー洗浄ができる','ビールサーバーのスポンジ洗浄ができる','ガン清掃ができる','ストロー・マドラー入れの交換ができる','製氷機の拭き上げができる','食洗器清掃ができる','シンクの清掃ができる','作業台・デシャップの拭き上げができる','HTの確認・ロス廃棄表の記入ができる']},
+    {title:'クローズ：キッチン',items:['ホテルパンの交換ができる','ピザ窯の清掃ができる','茹で麺機の清掃ができる','五徳・周辺の清掃ができる','フライヤーの清掃ができる','オーブンの清掃ができる']}
+  ]}
+];
+
+/* ══════════════════════════════════════
+   状態
+══════════════════════════════════════ */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCyLT_7kIePGAp6mnpjN1kOECrh_M2U8vk",
+  authDomain: "cona-skill.firebaseapp.com",
+  databaseURL: "https://cona-skill-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "cona-skill"
+};
+
+let db = null;
+let appData = {
+  staffList: [{id: 'staff_default', name: 'スタッフ1'}],
+  sheets: JSON.parse(JSON.stringify(DEFAULT_SHEETS)),
+  checks: {}
+};
+let curStaff = 0;
+let curSk = 0;
+let editSecIdx = -1;
+let editItemIdx = -1;
+let modalCb = null;
+let saving = false;
+
+/* ══════════════════════════════════════
+   Firebase設定
+══════════════════════════════════════ */
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem('fb_config') || 'null'); } catch(e) { return null; }
+}
+function saveConfig(cfg) {
+  localStorage.setItem('fb_config', JSON.stringify(cfg));
+}
+
+function connectFirebase() {
+  const cfg = {
+    apiKey: document.getElementById('cfg-apikey').value.trim(),
+    authDomain: document.getElementById('cfg-domain').value.trim(),
+    databaseURL: document.getElementById('cfg-dburl').value.trim(),
+    projectId: document.getElementById('cfg-projectid').value.trim(),
+  };
+  if (!cfg.apiKey || !cfg.databaseURL) {
+    showToast('API KeyとDatabase URLは必須です');
+    return;
+  }
+  saveConfig(cfg);
+  initFirebase(cfg);
+}
+
+function initFirebase(cfg) {
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(cfg);
+    }
+    db = firebase.database();
+    startApp();
+  } catch(e) {
+    showToast('接続エラー：設定を確認してください');
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('setup-screen').style.display = 'flex';
+  }
+}
+
+function startApp() {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+
+  const ref = db.ref('skillcheck');
+
+  // 初回ロード＋リアルタイム監視
+  ref.on('value', snap => {
+    const val = snap.val();
+    if (val) {
+      // チェックデータを保護しながらマージ
+      const myChecks = appData.checks;
+      appData = val;
+      if (!appData.checks) appData.checks = {};
+      // 自分のチェック変更がある場合は優先（楽観的更新）
+    }
+    render();
+    setSyncPill('ok');
+  }, err => {
+    setSyncPill('err');
+    showToast('同期エラー：' + err.message);
+  });
+}
+
+/* ══════════════════════════════════════
+   Firebase書き込み
+══════════════════════════════════════ */
+function pushToFirebase() {
+  if (!db) return;
+  setSyncPill('ing');
+  db.ref('skillcheck').set(appData)
+    .then(() => setSyncPill('ok'))
+    .catch(() => setSyncPill('err'));
+}
+
+function setSyncPill(s) {
+  const el = document.getElementById('sync-pill');
+  if (!el) return;
+  if (s === 'ok') { el.textContent = '● 同期済み'; el.className = 'sync-pill sync-ok'; }
+  else if (s === 'ing') { el.textContent = '↻ 同期中...'; el.className = 'sync-pill sync-ing'; }
+  else { el.textContent = '! 同期エラー'; el.className = 'sync-pill sync-err'; }
+}
+
+/* ══════════════════════════════════════
+   スタッフ操作
+══════════════════════════════════════ */
+function addStaff() {
+  openModal('スタッフ名を入力', '', name => {
+    if (!name) return;
+    const id = 'staff_' + Date.now();
+    if (!appData.staffList) appData.staffList = [];
+    appData.staffList.push({id, name});
+    curStaff = appData.staffList.length - 1;
+    pushToFirebase();
+    renderStaffBar();
+    renderList();
+    updateSummary();
+  });
+}
+
+function deleteStaff() {
+  if (!appData.staffList || appData.staffList.length <= 1) {
+    showToast('最低1人必要です');
+    return;
+  }
+  const name = appData.staffList[curStaff].name;
+  if (!confirm(name + ' を削除しますか？\nチェックデータも削除されます。')) return;
+  const staffId = appData.staffList[curStaff].id;
+  // チェックデータを消去
+  Object.keys(appData.checks || {}).forEach(k => {
+    if (k.startsWith(staffId + '|')) delete appData.checks[k];
+  });
+  appData.staffList.splice(curStaff, 1);
+  if (curStaff >= appData.staffList.length) curStaff = appData.staffList.length - 1;
+  pushToFirebase();
+  render();
+}
+
+function editStaffName(idx) {
+  openModal('スタッフ名を変更', appData.staffList[idx].name, name => {
+    if (!name) return;
+    appData.staffList[idx].name = name;
+    pushToFirebase();
+    renderStaffBar();
+  });
+}
+
+function switchStaff(idx) {
+  curStaff = idx;
+  editSecIdx = -1; editItemIdx = -1;
+  renderStaffBar();
+  renderList();
+  updateSummary();
+}
+
+/* ══════════════════════════════════════
+   スキルタブ切り替え
+══════════════════════════════════════ */
+function switchSk(idx) {
+  curSk = idx;
+  editSecIdx = -1; editItemIdx = -1;
+  document.querySelectorAll('.sktab').forEach((t, i) => t.className = 'sktab' + (i === idx ? ' active' : ''));
+  renderList();
+  updateSummary();
+}
+
+/* ══════════════════════════════════════
+   チェック操作
+══════════════════════════════════════ */
+function ckKey(staffId, sk, si, ii) { return staffId + '|' + sk + '|' + si + '|' + ii; }
+
+function toggle(staffId, sk, si, ii, col) {
+  const k = ckKey(staffId, sk, si, ii);
+  if (!appData.checks) appData.checks = {};
+  if (!appData.checks[k]) appData.checks[k] = [0, 0, 0];
+  appData.checks[k][col] = appData.checks[k][col] ? 0 : 1;
+
+  // UI即反映（楽観的更新）
+  const syms = ['✓', '✓', '★'];
+  const btn = document.getElementById('ck_' + staffId + '_' + sk + '_' + si + '_' + ii + '_' + col);
+  if (btn) {
+    const on = appData.checks[k][col];
+    btn.className = 'ckbtn' + (on ? ' on' + (col + 1) : '');
+    btn.querySelector('.ck').textContent = on ? syms[col] : '';
+  }
+  updateSummary();
+  pushToFirebase();
+}
+
+/* ══════════════════════════════════════
+   設問編集
+══════════════════════════════════════ */
+function toggleSecEdit(si) {
+  if (editSecIdx === si && editItemIdx === -1) { editSecIdx = -1; }
+  else { editSecIdx = si; editItemIdx = -1; }
+  renderList();
+}
+
+function toggleItemEdit(si, ii) {
+  if (editSecIdx === si && editItemIdx === ii) { editSecIdx = -1; editItemIdx = -1; }
+  else { editSecIdx = si; editItemIdx = ii; }
+  renderList();
+}
+
+function saveSecTitle(si) {
+  const v = (document.getElementById('sinp_' + si) || {}).value;
+  if (v && v.trim()) appData.sheets[curSk].sections[si].title = v.trim();
+  editSecIdx = -1; editItemIdx = -1;
+  pushToFirebase(); renderList();
+}
+
+function saveItem(si, ii) {
+  const v = (document.getElementById('iinp_' + si + '_' + ii) || {}).value;
+  if (v && v.trim()) appData.sheets[curSk].sections[si].items[ii] = v.trim();
+  editSecIdx = -1; editItemIdx = -1;
+  pushToFirebase(); renderList(); updateSummary();
+}
+
+function deleteItem(si, ii) {
+  if (!confirm('この設問を削除しますか？')) return;
+  appData.sheets[curSk].sections[si].items.splice(ii, 1);
+  editSecIdx = -1; editItemIdx = -1;
+  pushToFirebase(); renderList(); updateSummary();
+}
+
+function deleteSec(si) {
+  const hasItems = appData.sheets[curSk].sections[si].items.length > 0;
+  if (hasItems && !confirm('この区分と設問をすべて削除しますか？')) return;
+  appData.sheets[curSk].sections.splice(si, 1);
+  editSecIdx = -1; editItemIdx = -1;
+  pushToFirebase(); renderList(); updateSummary();
+}
+
+function addItemTo(si) {
+  openModal('新しい設問を入力', '', text => {
+    if (!text) return;
+    appData.sheets[curSk].sections[si].items.push(text);
+    editSecIdx = -1; editItemIdx = -1;
+    pushToFirebase(); renderList(); updateSummary();
+  });
+}
+
+function addSection() {
+  openModal('新しい区分名を入力', '', title => {
+    if (!title) return;
+    appData.sheets[curSk].sections.push({title, items: []});
+    editSecIdx = appData.sheets[curSk].sections.length - 1;
+    editItemIdx = -1;
+    pushToFirebase(); renderList();
+  });
+}
+
+/* ══════════════════════════════════════
+   描画
+══════════════════════════════════════ */
+function render() {
+  renderStaffBar();
+  renderList();
+  updateSummary();
+}
+
+function renderStaffBar() {
+  const el = document.getElementById('staff-tabs');
+  if (!el || !appData.staffList) return;
+  el.innerHTML = appData.staffList.map((s, i) =>
+    `<div class="stab${i === curStaff ? ' active' : ''}" onclick="switchStaff(${i})">
+      ${esc(s.name)}
+      <button class="stab-pencil" onclick="event.stopPropagation();editStaffName(${i})">✎</button>
+    </div>`
+  ).join('');
+}
+
+function renderList() {
+  const staffId = appData.staffList?.[curStaff]?.id;
+  const sheet = appData.sheets?.[curSk];
+  if (!staffId || !sheet) return;
+  const checks = appData.checks || {};
+  let html = '';
+
+  sheet.sections.forEach((sec, si) => {
+    const secEd = editSecIdx === si && editItemIdx === -1;
+    html += `<div class="sec-hdr">
+      <span class="sec-title">${esc(sec.title)}</span>
+      <button class="sec-edit-btn" onclick="toggleSecEdit(${si})">✎ 区分編集</button>
+    </div>`;
+
+    if (secEd) {
+      html += `<div class="sec-edit-panel">
+        <input id="sinp_${si}" value="${esc(sec.title)}" placeholder="区分名">
+        <div class="sec-edit-actions">
+          <button style="background:var(--green-bg);color:var(--green-dark);" onclick="saveSecTitle(${si})">保存</button>
+          <button style="background:var(--red-bg);color:var(--red-dark);" onclick="deleteSec(${si})">区分を削除</button>
+        </div>
+      </div>`;
+    }
+
+    sec.items.forEach((item, ii) => {
+      const itemEd = editSecIdx === si && editItemIdx === ii;
+      const k = ckKey(staffId, curSk, si, ii);
+      const v = checks[k] || [0, 0, 0];
+      html += `<div class="item-row">
+        <div class="item-txt">
+          ${esc(item)}
+          <button class="item-edit-btn" onclick="toggleItemEdit(${si},${ii})">✎</button>
+        </div>
+        <div class="checks">
+          ${[0, 1, 2].map(col =>
+            `<button class="ckbtn${v[col] ? ' on' + (col + 1) : ''}"
+              id="ck_${staffId}_${curSk}_${si}_${ii}_${col}"
+              onclick="toggle('${staffId}',${curSk},${si},${ii},${col})">
+              <div class="ck">${v[col] ? ['✓','✓','★'][col] : ''}</div>
+            </button>`
+          ).join('')}
+        </div>
+      </div>`;
+
+      if (itemEd) {
+        html += `<div class="edit-panel">
+          <div class="edit-row">
+            <input id="iinp_${si}_${ii}" value="${esc(item)}" placeholder="設問テキスト">
+          </div>
+          <div class="edit-row">
+            <button class="ebtn ebtn-save" onclick="saveItem(${si},${ii})">保存</button>
+            <button class="ebtn ebtn-del" onclick="deleteItem(${si},${ii})">削除</button>
+          </div>
+        </div>`;
+      }
+    });
+
+    html += `<button class="add-item-btn" onclick="addItemTo(${si})">＋ 設問を追加</button>`;
+  });
+
+  html += `<button class="add-sec-btn" onclick="addSection()">＋ 区分を追加</button>`;
+  document.getElementById('list').innerHTML = html;
+}
+
+function updateSummary() {
+  const staffId = appData.staffList?.[curStaff]?.id;
+  const sheet = appData.sheets?.[curSk];
+  if (!staffId || !sheet) return;
+  const checks = appData.checks || {};
+  let t = 0, c = 0, e = 0, total = 0;
+  sheet.sections.forEach((sec, si) => {
+    sec.items.forEach((_, ii) => {
+      total++;
+      const v = checks[ckKey(staffId, curSk, si, ii)] || [0, 0, 0];
+      if (v[0]) t++; if (v[1]) c++; if (v[2]) e++;
+    });
+  });
+  document.getElementById('sn-t').textContent = t;
+  document.getElementById('sn-c').textContent = c;
+  document.getElementById('sn-e').textContent = e;
+  document.getElementById('sn-all').textContent = total;
+  document.getElementById('prog').style.width = (total ? Math.round(Math.max(t, c, e) / total * 100) : 0) + '%';
+}
+
+/* ══════════════════════════════════════
+   モーダル
+══════════════════════════════════════ */
+function openModal(title, val, cb) {
+  modalCb = cb;
+  document.getElementById('modal-h').textContent = title;
+  document.getElementById('modal-inp').value = val;
+  document.getElementById('modal').classList.add('show');
+  setTimeout(() => document.getElementById('modal-inp').focus(), 100);
+}
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+function modalOk() {
+  const v = document.getElementById('modal-inp').value.trim();
+  closeModal();
+  if (modalCb) modalCb(v);
+}
+document.getElementById('modal-inp').addEventListener('keydown', e => { if (e.key === 'Enter') modalOk(); });
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ══════════════════════════════════════
+   起動
+══════════════════════════════════════ */
+
+window.addEventListener('load', () => {
+  initFirebase(firebaseConfig);
+});
+
+</script>
+</body>
+</html>
