@@ -48,6 +48,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP'
 #hdr{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 14px 8px;flex-shrink:0;position:sticky;top:0;z-index:30;}
 .hdr-top{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
 .hdr-title{font-size:15px;font-weight:600;color:var(--ink);flex:1;}
+.hdr-title-input{font-size:15px;font-weight:600;color:var(--ink);flex:1;border:none;outline:none;background:transparent;padding:0;min-width:0;}
+.hdr-title-input::placeholder{color:var(--ink3);}
 .sync-pill{font-size:10px;padding:3px 9px;border-radius:99px;font-weight:500;transition:all .2s;}
 .sync-ok{background:var(--green-bg);color:var(--green-dark);}
 .sync-ing{background:var(--blue-bg);color:var(--blue-dark);}
@@ -182,7 +184,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP'
 <div id="app" style="display:none;">
   <div id="hdr">
     <div class="hdr-top">
-      <span class="hdr-title">CONAスキルチェック</span>
+      <input id="app-title" class="hdr-title-input" type="text" value="CONAスキルチェック" placeholder="タイトルを入力" oninput="updateTitle(this.value)">
       <span class="sync-pill sync-ok" id="sync-pill">● 同期済み</span>
     </div>
     <div class="prog-bar"><div class="prog-fill" id="prog" style="width:0%"></div></div>
@@ -278,6 +280,7 @@ const firebaseConfig = {
 
 let db = null;
 let appData = {
+  title: 'CONAスキルチェック',
   staffList: [{id: 'staff_default', name: 'スタッフ1'}],
   sheets: JSON.parse(JSON.stringify(DEFAULT_SHEETS)),
   checks: {}
@@ -342,6 +345,7 @@ function startApp() {
       // チェックデータを保護しながらマージ
       const myChecks = appData.checks;
       appData = val;
+      if (!appData.title) appData.title = 'CONAスキルチェック';
       if (!appData.checks) appData.checks = {};
       // 自分のチェック変更がある場合は優先（楽観的更新）
     }
@@ -370,6 +374,11 @@ function setSyncPill(s) {
   if (s === 'ok') { el.textContent = '● 同期済み'; el.className = 'sync-pill sync-ok'; }
   else if (s === 'ing') { el.textContent = '↻ 同期中...'; el.className = 'sync-pill sync-ing'; }
   else { el.textContent = '! 同期エラー'; el.className = 'sync-pill sync-err'; }
+}
+
+function updateTitle(value) {
+  appData.title = (value || '').trim() || 'CONAスキルチェック';
+  pushToFirebase();
 }
 
 /* ══════════════════════════════════════
@@ -525,6 +534,8 @@ function addSection() {
    描画
 ══════════════════════════════════════ */
 function render() {
+  const titleEl = document.getElementById('app-title');
+  if (titleEl) titleEl.value = appData.title || 'CONAスキルチェック';
   renderStaffBar();
   renderList();
   updateSummary();
