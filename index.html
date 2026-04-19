@@ -57,6 +57,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP'
 .prog-bar{height:2px;background:var(--line);border-radius:1px;overflow:hidden;}
 .prog-fill{height:100%;background:var(--green);transition:width .35s;}
 
+/* ─── AREA BAR ─── */
+#area-area{background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;}
+.area-scroll-wrap{display:flex;align-items:center;}
+#area-tabs{display:flex;overflow-x:auto;flex:1;scrollbar-width:none;}
+#area-tabs::-webkit-scrollbar{display:none;}
+.atab{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:10px 13px;font-size:12px;color:var(--ink3);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;}
+.atab.active{color:var(--green-dark);border-bottom-color:var(--green);font-weight:600;}
+.atab-pencil{background:none;border:none;color:var(--ink4);font-size:11px;cursor:pointer;padding:0 1px;line-height:1;}
+.add-area{flex-shrink:0;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border:none;background:none;font-size:20px;color:var(--ink3);cursor:pointer;}
+.del-area{flex-shrink:0;padding:8px 10px;border:none;background:none;font-size:12px;color:var(--red);cursor:pointer;}
+
 /* ─── STAFF BAR ─── */
 #staff-area{background:var(--surface);border-bottom:1px solid var(--line);flex-shrink:0;}
 .staff-scroll-wrap{display:flex;align-items:center;}
@@ -190,6 +201,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP'
     <div class="prog-bar"><div class="prog-fill" id="prog" style="width:0%"></div></div>
   </div>
 
+  <div id="area-area">
+    <div class="area-scroll-wrap">
+      <div id="area-tabs"></div>
+      <button class="add-area" onclick="addArea()" title="エリア追加">+</button>
+      <button class="del-area" onclick="deleteArea()">削除</button>
+    </div>
+  </div>
+
   <div id="staff-area">
     <div class="staff-scroll-wrap">
       <div id="staff-tabs"></div>
@@ -280,17 +299,42 @@ const firebaseConfig = {
 
 let db = null;
 let appData = {
-  title: 'CONAスキルチェック',
-  staffList: [{id: 'staff_default', name: 'スタッフ1'}],
-  sheets: JSON.parse(JSON.stringify(DEFAULT_SHEETS)),
-  checks: {}
+  areas: [
+    {
+      id: 'area_default',
+      name: 'エリア1',
+      title: 'CONAスキルチェック',
+      staffList: [{id: 'staff_default', name: 'スタッフ1'}],
+      sheets: JSON.parse(JSON.stringify(DEFAULT_SHEETS)),
+      checks: {}
+    }
+  ]
 };
+let curArea = 0;
 let curStaff = 0;
 let curSk = 0;
 let editSecIdx = -1;
 let editItemIdx = -1;
 let modalCb = null;
 let saving = false;
+
+function makeDefaultArea(name = 'エリア') {
+  return {
+    id: 'area_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+    name,
+    title: 'CONAスキルチェック',
+    staffList: [{id: 'staff_default', name: 'スタッフ1'}],
+    sheets: JSON.parse(JSON.stringify(DEFAULT_SHEETS)),
+    checks: {}
+  };
+}
+function getCurrentArea() {
+  if (!appData.areas || !appData.areas.length) {
+    appData.areas = [makeDefaultArea('エリア1')];
+  }
+  if (curArea >= appData.areas.length) curArea = 0;
+  return appData.areas[curArea];
+}
 
 /* ══════════════════════════════════════
    Firebase設定
@@ -345,8 +389,17 @@ function startApp() {
       // チェックデータを保護しながらマージ
       const myChecks = appData.checks;
       appData = val;
-      if (!appData.title) appData.title = 'CONAスキルチェック';
-      if (!appData.checks) appData.checks = {};
+      if (!appData.areas || !appData.areas.length) {
+        appData.areas = [makeDefaultArea('エリア1')];
+      }
+      appData.areas.forEach((area, idx) => {
+        if (!area.id) area.id = 'area_' + idx + '_' + Date.now();
+        if (!area.name) area.name = 'エリア' + (idx + 1);
+        if (!area.title) area.title = 'CONAスキルチェック';
+        if (!area.staffList || !area.staffList.length) area.staffList = [{id:'staff_default', name:'スタッフ1'}];
+        if (!area.sheets) area.sheets = JSON.parse(JSON.stringify(DEFAULT_SHEETS));
+        if (!area.checks) area.checks = {};
+      });
       // 自分のチェック変更がある場合は優先（楽観的更新）
     }
     render();
@@ -377,20 +430,69 @@ function setSyncPill(s) {
 }
 
 function updateTitle(value) {
-  appData.title = (value || '').trim() || 'CONAスキルチェック';
+  const area = getCurrentArea();
+  area.title = (value || '').trim() || 'CONAスキルチェック';
   pushToFirebase();
+}
+
+/* ══════════════════════════════════════
+   エリア操作
+══════════════════════════════════════ */
+function addArea() {
+  openModal('エリア名を入力', '', name => {
+    if (!name) return;
+    if (!appData.areas) appData.areas = [];
+    appData.areas.push(makeDefaultArea(name));
+    curArea = appData.areas.length - 1;
+    curStaff = 0;
+    curSk = 0;
+    pushToFirebase();
+    render();
+  });
+}
+
+function deleteArea() {
+  if (!appData.areas || appData.areas.length <= 1) {
+    showToast('最低1エリア必要です');
+    return;
+  }
+  const area = getCurrentArea();
+  if (!confirm(area.name + ' を削除しますか？\nこのエリアのスタッフ・設問・チェックも削除されます。')) return;
+  appData.areas.splice(curArea, 1);
+  if (curArea >= appData.areas.length) curArea = appData.areas.length - 1;
+  curStaff = 0;
+  curSk = 0;
+  pushToFirebase();
+  render();
+}
+
+function editAreaName(idx) {
+  openModal('エリア名を変更', appData.areas[idx].name, name => {
+    if (!name) return;
+    appData.areas[idx].name = name;
+    pushToFirebase();
+    renderAreaBar();
+  });
+}
+
+function switchArea(idx) {
+  curArea = idx;
+  curStaff = 0;
+  editSecIdx = -1; editItemIdx = -1;
+  render();
 }
 
 /* ══════════════════════════════════════
    スタッフ操作
 ══════════════════════════════════════ */
 function addStaff() {
+  const area = getCurrentArea();
   openModal('スタッフ名を入力', '', name => {
     if (!name) return;
     const id = 'staff_' + Date.now();
-    if (!appData.staffList) appData.staffList = [];
-    appData.staffList.push({id, name});
-    curStaff = appData.staffList.length - 1;
+    if (!area.staffList) area.staffList = [];
+    area.staffList.push({id, name});
+    curStaff = area.staffList.length - 1;
     pushToFirebase();
     renderStaffBar();
     renderList();
@@ -399,27 +501,29 @@ function addStaff() {
 }
 
 function deleteStaff() {
-  if (!appData.staffList || appData.staffList.length <= 1) {
+  const area = getCurrentArea();
+  if (!area.staffList || area.staffList.length <= 1) {
     showToast('最低1人必要です');
     return;
   }
-  const name = appData.staffList[curStaff].name;
+  const name = area.staffList[curStaff].name;
   if (!confirm(name + ' を削除しますか？\nチェックデータも削除されます。')) return;
-  const staffId = appData.staffList[curStaff].id;
+  const staffId = area.staffList[curStaff].id;
   // チェックデータを消去
   Object.keys(appData.checks || {}).forEach(k => {
     if (k.startsWith(staffId + '|')) delete appData.checks[k];
   });
-  appData.staffList.splice(curStaff, 1);
-  if (curStaff >= appData.staffList.length) curStaff = appData.staffList.length - 1;
+  area.staffList.splice(curStaff, 1);
+  if (curStaff >= area.staffList.length) curStaff = area.staffList.length - 1;
   pushToFirebase();
   render();
 }
 
 function editStaffName(idx) {
-  openModal('スタッフ名を変更', appData.staffList[idx].name, name => {
+  const area = getCurrentArea();
+  openModal('スタッフ名を変更', area.staffList[idx].name, name => {
     if (!name) return;
-    appData.staffList[idx].name = name;
+    area.staffList[idx].name = name;
     pushToFirebase();
     renderStaffBar();
   });
@@ -450,16 +554,17 @@ function switchSk(idx) {
 function ckKey(staffId, sk, si, ii) { return staffId + '|' + sk + '|' + si + '|' + ii; }
 
 function toggle(staffId, sk, si, ii, col) {
+  const area = getCurrentArea();
   const k = ckKey(staffId, sk, si, ii);
-  if (!appData.checks) appData.checks = {};
-  if (!appData.checks[k]) appData.checks[k] = [0, 0, 0];
-  appData.checks[k][col] = appData.checks[k][col] ? 0 : 1;
+  if (!area.checks) area.checks = {};
+  if (!area.checks[k]) area.checks[k] = [0, 0, 0];
+  area.checks[k][col] = area.checks[k][col] ? 0 : 1;
 
   // UI即反映（楽観的更新）
   const syms = ['✓', '✓', '★'];
   const btn = document.getElementById('ck_' + staffId + '_' + sk + '_' + si + '_' + ii + '_' + col);
   if (btn) {
-    const on = appData.checks[k][col];
+    const on = area.checks[k][col];
     btn.className = 'ckbtn' + (on ? ' on' + (col + 1) : '');
     btn.querySelector('.ck').textContent = on ? syms[col] : '';
   }
@@ -484,29 +589,29 @@ function toggleItemEdit(si, ii) {
 
 function saveSecTitle(si) {
   const v = (document.getElementById('sinp_' + si) || {}).value;
-  if (v && v.trim()) appData.sheets[curSk].sections[si].title = v.trim();
+  if (v && v.trim()) getCurrentArea().sheets[curSk].sections[si].title = v.trim();
   editSecIdx = -1; editItemIdx = -1;
   pushToFirebase(); renderList();
 }
 
 function saveItem(si, ii) {
   const v = (document.getElementById('iinp_' + si + '_' + ii) || {}).value;
-  if (v && v.trim()) appData.sheets[curSk].sections[si].items[ii] = v.trim();
+  if (v && v.trim()) getCurrentArea().sheets[curSk].sections[si].items[ii] = v.trim();
   editSecIdx = -1; editItemIdx = -1;
   pushToFirebase(); renderList(); updateSummary();
 }
 
 function deleteItem(si, ii) {
   if (!confirm('この設問を削除しますか？')) return;
-  appData.sheets[curSk].sections[si].items.splice(ii, 1);
+  getCurrentArea().sheets[curSk].sections[si].items.splice(ii, 1);
   editSecIdx = -1; editItemIdx = -1;
   pushToFirebase(); renderList(); updateSummary();
 }
 
 function deleteSec(si) {
-  const hasItems = appData.sheets[curSk].sections[si].items.length > 0;
+  const hasItems = getCurrentArea().sheets[curSk].sections[si].items.length > 0;
   if (hasItems && !confirm('この区分と設問をすべて削除しますか？')) return;
-  appData.sheets[curSk].sections.splice(si, 1);
+  getCurrentArea().sheets[curSk].sections.splice(si, 1);
   editSecIdx = -1; editItemIdx = -1;
   pushToFirebase(); renderList(); updateSummary();
 }
@@ -514,7 +619,7 @@ function deleteSec(si) {
 function addItemTo(si) {
   openModal('新しい設問を入力', '', text => {
     if (!text) return;
-    appData.sheets[curSk].sections[si].items.push(text);
+    getCurrentArea().sheets[curSk].sections[si].items.push(text);
     editSecIdx = -1; editItemIdx = -1;
     pushToFirebase(); renderList(); updateSummary();
   });
@@ -523,8 +628,8 @@ function addItemTo(si) {
 function addSection() {
   openModal('新しい区分名を入力', '', title => {
     if (!title) return;
-    appData.sheets[curSk].sections.push({title, items: []});
-    editSecIdx = appData.sheets[curSk].sections.length - 1;
+    getCurrentArea().sheets[curSk].sections.push({title, items: []});
+    editSecIdx = getCurrentArea().sheets[curSk].sections.length - 1;
     editItemIdx = -1;
     pushToFirebase(); renderList();
   });
@@ -534,17 +639,31 @@ function addSection() {
    描画
 ══════════════════════════════════════ */
 function render() {
+  const area = getCurrentArea();
   const titleEl = document.getElementById('app-title');
-  if (titleEl) titleEl.value = appData.title || 'CONAスキルチェック';
+  if (titleEl) titleEl.value = area.title || 'CONAスキルチェック';
+  renderAreaBar();
   renderStaffBar();
   renderList();
   updateSummary();
 }
 
+function renderAreaBar() {
+  const el = document.getElementById('area-tabs');
+  if (!el || !appData.areas) return;
+  el.innerHTML = appData.areas.map((a, i) =>
+    `<div class="atab${i === curArea ? ' active' : ''}" onclick="switchArea(${i})">
+      ${esc(a.name)}
+      <button class="atab-pencil" onclick="event.stopPropagation();editAreaName(${i})">✎</button>
+    </div>`
+  ).join('');
+}
+
 function renderStaffBar() {
+  const area = getCurrentArea();
   const el = document.getElementById('staff-tabs');
-  if (!el || !appData.staffList) return;
-  el.innerHTML = appData.staffList.map((s, i) =>
+  if (!el || !area.staffList) return;
+  el.innerHTML = area.staffList.map((s, i) =>
     `<div class="stab${i === curStaff ? ' active' : ''}" onclick="switchStaff(${i})">
       ${esc(s.name)}
       <button class="stab-pencil" onclick="event.stopPropagation();editStaffName(${i})">✎</button>
@@ -553,10 +672,11 @@ function renderStaffBar() {
 }
 
 function renderList() {
-  const staffId = appData.staffList?.[curStaff]?.id;
-  const sheet = appData.sheets?.[curSk];
+  const area = getCurrentArea();
+  const staffId = area.staffList?.[curStaff]?.id;
+  const sheet = area.sheets?.[curSk];
   if (!staffId || !sheet) return;
-  const checks = appData.checks || {};
+  const checks = area.checks || {};
   let html = '';
 
   sheet.sections.forEach((sec, si) => {
@@ -617,10 +737,11 @@ function renderList() {
 }
 
 function updateSummary() {
-  const staffId = appData.staffList?.[curStaff]?.id;
-  const sheet = appData.sheets?.[curSk];
+  const area = getCurrentArea();
+  const staffId = area.staffList?.[curStaff]?.id;
+  const sheet = area.sheets?.[curSk];
   if (!staffId || !sheet) return;
-  const checks = appData.checks || {};
+  const checks = area.checks || {};
   let t = 0, c = 0, e = 0, total = 0;
   sheet.sections.forEach((sec, si) => {
     sec.items.forEach((_, ii) => {
