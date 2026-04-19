@@ -7,6 +7,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="CONAスキル">
 <title>CONAスキルチェック</title>
+<meta name="theme-color" content="#1F7A5A">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon-192.png">
 
 <!-- Firebase SDKs -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -15,9 +18,9 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 :root{
-  --green:#1D9E75;--green-bg:#E1F5EE;--green-dark:#085041;
+  --green:#1F7A5A;--green-bg:#EAF6F1;--green-dark:#124B39;
   --blue:#378ADD;--blue-bg:#E6F1FB;--blue-dark:#0C447C;
-  --amber:#BA7517;--amber-bg:#FAEEDA;--amber-dark:#633806;
+  --amber:#B99700;--amber-bg:#FBF6D6;--amber-dark:#6A5600;
   --red:#E24B4A;--red-bg:#FCEBEB;--red-dark:#791F1F;
   --ink:#1a1a1a;--ink2:#555;--ink3:#999;--ink4:#ccc;
   --surface:#fff;--surface2:#f8f8f5;--surface3:#f2f2ee;
@@ -795,5 +798,16 @@ window.addEventListener('load', () => {
 });
 
 </script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./service-worker.js').catch(function (err) {
+      console.error('Service Worker registration failed:', err);
+    });
+  });
+}
+</script>
+
 </body>
 </html>
